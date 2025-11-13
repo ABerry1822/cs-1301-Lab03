@@ -1,9 +1,6 @@
 import streamlit as st
 import requests
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import numpy as np
 from datetime import datetime
 
 # Page configuration
@@ -193,8 +190,8 @@ def format_population(population):
     else:
         return f"{population:,}"
 
-def create_population_chart(countries_data, selected_countries):
-    """Create interactive population comparison chart"""
+def create_population_table(countries_data, selected_countries):
+    """Create a table showing population comparison"""
     filtered_data = []
     for country in countries_data:
         country_name = country.get('name', {}).get('common', 'Unknown')
@@ -202,98 +199,42 @@ def create_population_chart(countries_data, selected_countries):
             filtered_data.append({
                 'Country': country_name,
                 'Population': country.get('population', 0),
+                'Formatted Population': format_population(country.get('population', 0)),
                 'Region': country.get('region', 'Unknown'),
-                'Area': country.get('area', 0)
+                'Area (km²)': f"{country.get('area', 0):,}" if country.get('area', 0) > 0 else 'Unknown',
+                'Density (/km²)': f"{(country.get('population', 0) / country.get('area', 1)):,.1f}" if country.get('area', 0) > 0 else 'Unknown'
             })
     
     if not filtered_data:
         return None
     
     df = pd.DataFrame(filtered_data)
-    
-    fig = px.bar(
-        df, 
-        x='Country', 
-        y='Population',
-        color='Region',
-        title='📊 Population Comparison',
-        labels={'Population': 'Population', 'Country': 'Country'},
-        hover_data=['Area']
-    )
-    
-    fig.update_layout(
-        template='plotly_white',
-        height=500,
-        showlegend=True
-    )
-    
-    return fig
+    return df[['Country', 'Formatted Population', 'Region', 'Area (km²)', 'Density (/km²)']]
 
-def create_region_pie_chart(countries_data):
-    """Create pie chart showing country distribution by region"""
+def create_region_summary(countries_data):
+    """Create a summary table of regions"""
     regions = {}
     for country in countries_data:
         region = country.get('region', 'Unknown')
-        regions[region] = regions.get(region, 0) + 1
-    
-    if not regions:
-        return None
+        if region not in regions:
+            regions[region] = {'count': 0, 'population': 0, 'area': 0}
         
-    df = pd.DataFrame(list(regions.items()), columns=['Region', 'Count'])
+        regions[region]['count'] += 1
+        regions[region]['population'] += country.get('population', 0)
+        regions[region]['area'] += country.get('area', 0)
     
-    fig = px.pie(
-        df, 
-        values='Count', 
-        names='Region',
-        title='🌍 Country Distribution by Region',
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
+    summary_data = []
+    for region, stats in regions.items():
+        avg_population = stats['population'] / stats['count'] if stats['count'] > 0 else 0
+        summary_data.append({
+            'Region': region,
+            'Countries': stats['count'],
+            'Total Population': format_population(stats['population']),
+            'Average Population': format_population(avg_population),
+            'Total Area (km²)': f"{stats['area']:,}"
+        })
     
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    fig.update_layout(height=500)
-    
-    return fig
-
-def create_area_vs_population_scatter(countries_data, selected_region):
-    """Create scatter plot of area vs population"""
-    filtered_data = []
-    for country in countries_data:
-        country_region = country.get('region', 'Unknown')
-        if selected_region == "All" or country_region == selected_region:
-            filtered_data.append({
-                'Country': country.get('name', {}).get('common', 'Unknown'),
-                'Population': country.get('population', 0),
-                'Area': country.get('area', 0),
-                'Region': country_region,
-                'Density': country.get('population', 0) / country.get('area', 1) if country.get('area', 0) > 0 else 0
-            })
-    
-    if not filtered_data:
-        return None
-    
-    df = pd.DataFrame(filtered_data)
-    
-    fig = px.scatter(
-        df, 
-        x='Area', 
-        y='Population',
-        size='Density',
-        color='Region',
-        hover_name='Country',
-        title='📈 Area vs Population Analysis',
-        log_x=True,
-        log_y=True,
-        size_max=60
-    )
-    
-    fig.update_layout(
-        template='plotly_white',
-        height=600,
-        xaxis_title='Area (sq km, log scale)',
-        yaxis_title='Population (log scale)'
-    )
-    
-    return fig
+    return pd.DataFrame(summary_data)
 
 def display_country_details(country):
     """Display individual country information in a clean layout"""
@@ -464,7 +405,7 @@ def main():
         st.metric("Total Area", f"{total_area:,.0f} km²")
     
     # Main content area with tabs
-    tab1, tab2, tab3 = st.tabs(["🏠 Country Explorer", "📈 Charts & Analysis", "🌐 Regional Insights"])
+    tab1, tab2, tab3 = st.tabs(["🏠 Country Explorer", "📈 Data Analysis", "🌐 Regional Insights"])
     
     with tab1:
         st.subheader("Country Details")
@@ -482,71 +423,78 @@ def main():
             st.warning("No countries match the current filters. Try adjusting the filters above.")
     
     with tab2:
-        st.subheader("Interactive Visualizations")
+        st.subheader("Data Analysis")
         
         if len(filtered_countries) > 1:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Population comparison chart
-                selected_for_chart = st.multiselect(
-                    "Select countries for population chart:",
+                # Population comparison table
+                st.subheader("📊 Population Comparison")
+                selected_for_table = st.multiselect(
+                    "Select countries to compare:",
                     [c.get('name', {}).get('common', 'Unknown') for c in filtered_countries],
                     default=[c.get('name', {}).get('common', 'Unknown') for c in filtered_countries[:3]]
                 )
                 
-                if selected_for_chart:
-                    pop_chart = create_population_chart(filtered_countries, selected_for_chart)
-                    if pop_chart:
-                        st.plotly_chart(pop_chart, use_container_width=True)
+                if selected_for_table:
+                    pop_table = create_population_table(filtered_countries, selected_for_table)
+                    if pop_table is not None:
+                        st.dataframe(pop_table, use_container_width=True)
+                    else:
+                        st.info("Select countries to see comparison table")
                 else:
-                    st.info("Select countries to see population comparison")
+                    st.info("Select countries from the list above to compare their data")
             
             with col2:
-                # Region distribution pie chart
-                region_chart = create_region_pie_chart(filtered_countries)
-                if region_chart:
-                    st.plotly_chart(region_chart, use_container_width=True)
-                else:
-                    st.info("Region distribution chart will appear here")
-            
-            # Area vs Population scatter plot
-            st.subheader("Area vs Population Analysis")
-            scatter_chart = create_area_vs_population_scatter(filtered_countries, selected_region)
-            if scatter_chart:
-                st.plotly_chart(scatter_chart, use_container_width=True)
-            else:
-                st.info("Scatter plot will appear here based on selected region")
+                # Quick statistics
+                st.subheader("📈 Quick Stats")
+                if filtered_countries:
+                    largest_country = max(filtered_countries, key=lambda x: x.get('population', 0))
+                    smallest_country = min(filtered_countries, key=lambda x: x.get('population', 0))
+                    
+                    st.metric(
+                        "Largest Population", 
+                        f"{largest_country.get('name', {}).get('common', 'Unknown')} ({format_population(largest_country.get('population', 0))})"
+                    )
+                    st.metric(
+                        "Smallest Population", 
+                        f"{smallest_country.get('name', {}).get('common', 'Unknown')} ({format_population(smallest_country.get('population', 0))})"
+                    )
+                    
+                    # Area comparison
+                    largest_area = max(filtered_countries, key=lambda x: x.get('area', 0))
+                    st.metric(
+                        "Largest Area", 
+                        f"{largest_area.get('name', {}).get('common', 'Unknown')} ({largest_area.get('area', 0):,} km²)"
+                    )
         else:
-            st.info("Select at least 2 countries to see interactive charts.")
+            st.info("Select at least 2 countries to see data analysis features.")
     
     with tab3:
         st.subheader("Regional Insights")
         
-        # Regional statistics
-        region_stats = {}
-        for country in countries_data:
-            region = country.get('region', 'Unknown')
-            if region not in region_stats:
-                region_stats[region] = {'count': 0, 'population': 0, 'area': 0}
-            
-            region_stats[region]['count'] += 1
-            region_stats[region]['population'] += country.get('population', 0)
-            region_stats[region]['area'] += country.get('area', 0)
+        # Regional statistics table
+        region_table = create_region_summary(countries_data)
+        if not region_table.empty:
+            st.subheader("🌍 Regional Summary")
+            st.dataframe(region_table, use_container_width=True)
         
-        if region_stats:
-            for region, stats in region_stats.items():
-                with st.expander(f"🌍 {region} Region ({stats['count']} countries)"):
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Population", format_population(stats['population']))
-                    with col2:
-                        st.metric("Total Area", f"{stats['area']:,.0f} km²")
-                    with col3:
-                        avg_pop = stats['population'] / stats['count'] if stats['count'] > 0 else 0
-                        st.metric("Average Population", format_population(avg_pop))
+        # Regional breakdown
+        st.subheader("Regional Distribution")
+        region_counts = {}
+        for country in filtered_countries:
+            region = country.get('region', 'Unknown')
+            region_counts[region] = region_counts.get(region, 0) + 1
+        
+        if region_counts:
+            for region, count in region_counts.items():
+                st.write(f"**{region}**: {count} countries")
+                # Simple bar using text (since we don't have plotly)
+                bar_length = int((count / len(filtered_countries)) * 50)
+                st.write("▮" * bar_length + f" ({count/len(filtered_countries)*100:.1f}%)")
         else:
-            st.info("Regional data will be displayed when more countries are available.")
+            st.info("Regional data will be displayed when countries are available.")
 
     # Footer
     st.markdown("---")
