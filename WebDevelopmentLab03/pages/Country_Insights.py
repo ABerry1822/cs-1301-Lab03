@@ -3,7 +3,39 @@ import requests
 import google.generativeai as genai
 import os
 
-
+def generate_travel_guide(self, country_data, traveler_type, duration):
+    """Generate a travel guide using Gemini"""
+    st.sidebar.header("🔍 Travel Guide Debug")
+    
+    if not self.gemini_available:
+        st.sidebar.error("❌ Gemini marked as unavailable in class")
+        return "Gemini API not configured. Please check your API key."
+    
+    st.sidebar.success("✅ Gemini is available!")
+    
+    # Test with a VERY simple prompt first
+    test_prompt = "Say 'Hello World' in 5 words or less."
+    
+    st.sidebar.write("🧪 Testing with simple prompt...")
+    try:
+        test_response = self.model.generate_content(test_prompt)
+        st.sidebar.success(f"✅ Simple test worked: '{test_response.text}'")
+    except Exception as e:
+        st.sidebar.error(f"❌ Simple test failed: {str(e)}")
+        return f"AI service error: {str(e)}"
+    
+    # If simple test works, try the actual travel guide
+    country_name = country_data.get('name', {}).get('common', 'Unknown')
+    prompt = f"Create a 3-day travel guide for {country_name} for {traveler_type} travelers. Keep it brief."
+    
+    st.sidebar.write("📝 Trying actual travel guide prompt...")
+    try:
+        response = self.model.generate_content(prompt)
+        st.sidebar.success("✅ Travel guide generated successfully!")
+        return response.text
+    except Exception as e:
+        st.sidebar.error(f"❌ Travel guide failed: {str(e)}")
+        return f"Error generating travel guide: {str(e)}"
 def generate_travel_guide(self, country_data, traveler_type, duration):
     """Generate a travel guide using Gemini"""
     st.sidebar.write("🔍 Debug: Starting generate_travel_guide")
