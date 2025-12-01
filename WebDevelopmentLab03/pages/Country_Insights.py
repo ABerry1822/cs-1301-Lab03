@@ -2,6 +2,16 @@ import streamlit as st
 import requests
 import google.generativeai as genai
 import os
+
+# 🚨 TEMPORARY DEBUG - ADD THESE LINES
+st.sidebar.header("🔧 Debug Info")
+if "GEMINI_API_KEY" in st.secrets:
+    st.sidebar.success("✅ API Key found in secrets!")
+    st.sidebar.write("Key starts with:", st.secrets["GEMINI_API_KEY"][:10] + "...")
+else:
+    st.sidebar.error("❌ GEMINI_API_KEY NOT found in secrets!")
+    st.sidebar.write("Available secrets:", list(st.secrets.keys()))
+# END DEBUG CODE
 def generate_travel_guide(self, country_data, traveler_type, duration):
     """Generate a travel guide using Gemini"""
     if not self.gemini_available:
