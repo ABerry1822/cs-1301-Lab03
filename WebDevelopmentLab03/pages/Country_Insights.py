@@ -14,9 +14,32 @@ else:
 # END DEBUG CODE
 def generate_travel_guide(self, country_data, traveler_type, duration):
     """Generate a travel guide using Gemini"""
+    st.sidebar.write("🔍 Debug: Starting generate_travel_guide")
+    st.sidebar.write("🔍 Debug: gemini_available =", self.gemini_available)
+    
     if not self.gemini_available:
-        st.error("❌ Gemini is NOT available - check API key")
+        st.sidebar.error("❌ Gemini is NOT available in class init")
         return "Gemini API not configured. Please check your API key."
+    
+    st.sidebar.success("✅ Gemini is available in class!")
+    
+    # Build prompt
+    country_name = country_data.get('name', {}).get('common', 'Unknown')
+    prompt = f"Create a simple 3-day {traveler_type} travel guide for {country_name}. Include budget tips and 3 main attractions."
+    
+    st.sidebar.write("🔍 Debug: Prompt ready, length:", len(prompt))
+    
+    try:
+        st.sidebar.info("📡 Attempting to call Gemini API...")
+        response = self.model.generate_content(prompt)
+        st.sidebar.success("✅ Gemini API call successful!")
+        st.sidebar.write("🔍 Debug: Response type:", type(response))
+        st.sidebar.write("🔍 Debug: Response text length:", len(response.text))
+        return response.text
+    except Exception as e:
+        st.sidebar.error(f"❌ Gemini API Exception: {str(e)}")
+        st.sidebar.error(f"❌ Exception type: {type(e).__name__}")
+        return f"AI service temporarily unavailable. Please try again later. Error: {str(e)}"
     
     st.info("🔄 Attempting to call Gemini API...")
     
