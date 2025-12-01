@@ -1,10 +1,12 @@
 import streamlit as st
 import requests
 import google.generativeai as genai
+import pandas as pd
+import plotly.express as px
 
-# Page configuration
+# ---------- Page Configuration ----------
 st.set_page_config(
-    page_title="Country Insights with AI",
+    page_title="AI Country Analysis",
     page_icon="🤖",
     layout="wide"
 )
@@ -12,7 +14,7 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    .ai-header {
+    .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 2rem;
@@ -20,312 +22,406 @@ st.markdown("""
         margin-bottom: 2rem;
         text-align: center;
     }
-    .insight-card {
+    .analysis-card {
         background-color: #f8f9fa;
         padding: 1.5rem;
         border-radius: 10px;
-        border-left: 5px solid #667eea;
+        border-left: 5px solid #4CAF50;
         margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
 
-class CountryInsights:
-    def __init__(self):
-        self.base_url = "https://restcountries.com/v3.1"
-        self.session = requests.Session()
-        
-        # Configure Gemini with detailed debugging
-        st.sidebar.header("🚀 Gemini Initialization")
-        
-        try:
-            # Check if secret exists
-            if "GEMINI_API_KEY" not in st.secrets:
-                st.sidebar.error("❌ GEMINI_API_KEY not found in st.secrets!")
-                self.gemini_available = False
-                return
-            
-            api_key = st.secrets["GEMINI_API_KEY"]
-            st.sidebar.success(f"✅ API Key found: {api_key[:12]}...")
-            
-            # Configure Gemini
-            genai.configure(api_key=api_key)
-            
-            # 🎯 USE THE CORRECT MODEL NAME
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-            st.sidebar.success("✅ Using gemini-1.5-flash model")
-            
-            # Test the connection
-            test_response = self.model.generate_content("Say 'Hello' in 3 words.")
-            st.sidebar.success(f"✅ Test successful: '{test_response.text}'")
-            
-            self.gemini_available = True
-            st.sidebar.success("🎉 Gemini is ready!")
-            
-        except Exception as e:
-            st.sidebar.error(f"❌ Initialization Failed: {str(e)}")
-            self.gemini_available = False
+# ---------- Header ----------
+st.markdown('<div class="main-header"><h1>🤖 AI-Powered Country Analysis</h1><p>Advanced country insights powered by Google Gemini AI</p></div>', unsafe_allow_html=True)
 
-    def get_country_data(self, country_name):
-        """Fetch data for a specific country"""
-        try:
-            response = self.session.get(f"{self.base_url}/name/{country_name}")
-            if response.status_code == 200:
-                data = response.json()
-                return data[0] if data else None
-        except:
+# ---------- Initialize Gemini ----------
+@st.cache_resource
+def init_gemini():
+    """Initialize Gemini AI with error handling"""
+    try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.sidebar.error("⚠️ GEMINI_API_KEY not found!")
             return None
+        
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        
+        # Try different models
+        models_to_try = ["gemini-pro", "gemini-1.0-pro", "models/gemini-pro"]
+        
+        for model_name in models_to_try:
+            try:
+                model = genai.GenerativeModel(model_name)
+                # Quick test
+                response = model.generate_content("Test")
+                st.sidebar.success(f"✅ Using {model_name}")
+                return model
+            except:
+                continue
+        
+        return None
+    except Exception as e:
+        st.sidebar.error(f"❌ Gemini Error: {str(e)}")
         return None
 
-    def get_country_comparison(self, country1, country2):
-        """Fetch data for two countries to compare"""
-        country1_data = self.get_country_data(country1)
-        country2_data = self.get_country_data(country2)
-        return country1_data, country2_data
+# Initialize Gemini
+gemini_model = init_gemini()
 
-    def generate_travel_guide(self, country_data, traveler_type, duration):
-        """Generate a travel guide using Gemini"""
-        if not self.gemini_available:
-            return "Gemini API not configured. Please check your API key."
-        
-        country_name = country_data.get('name', {}).get('common', 'Unknown')
-        capital = country_data.get('capital', ['Unknown'])[0] if country_data.get('capital') else 'Unknown'
-        population = country_data.get('population', 0)
-        area = country_data.get('area', 0)
-        region = country_data.get('region', 'Unknown')
-        languages = list(country_data.get('languages', {}).values()) if country_data.get('languages') else ['Unknown']
-        
+# ---------- REST Countries API Helper ----------
+def fetch_country_data(country_name):
+    """Fetch data for a specific country"""
+    try:
+        response = requests.get(f"https://restcountries.com/v3.1/name/{country_name}", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                country = data[0]
+                return {
+                    "name": country.get("name", {}).get("common"),
+                    "official_name": country.get("name", {}).get("official"),
+                    "capital": country.get("capital", ["Unknown"])[0] if country.get("capital") else "Unknown",
+                    "region": country.get("region", "Unknown"),
+                    "subregion": country.get("subregion", "Unknown"),
+                    "population": country.get("population", 0),
+                    "area": country.get("area", 0),
+                    "languages": list(country.get("languages", {}).values()) if country.get("languages") else ["Unknown"],
+                    "currencies": list(country.get("currencies", {}).keys()) if country.get("currencies") else ["Unknown"],
+                    "timezones": country.get("timezones", []),
+                    "flag": country.get("flag", "🏳️"),
+                    "coordinates": country.get("latlng", [0, 0])
+                }
+    except Exception as e:
+        st.error(f"Error fetching data: {str(e)}")
+    return None
+
+def fetch_comparison_data(country1, country2):
+    """Fetch data for two countries to compare"""
+    return fetch_country_data(country1), fetch_country_data(country2)
+
+# ---------- AI Analysis Functions ----------
+def generate_travel_analysis(country_data, traveler_type, season, duration):
+    """Generate travel analysis using Gemini"""
+    if not gemini_model:
+        return "⚠️ Gemini AI is not available. Please check your API key configuration."
+    
+    try:
         prompt = f"""
-        Create a detailed {duration}-day travel guide for {country_name} specifically for {traveler_type}.
+        Create a comprehensive travel analysis for {country_data['name']} for a {traveler_type} traveler.
+        
+        Travel Details:
+        - Season: {season}
+        - Duration: {duration} days
+        - Traveler Type: {traveler_type}
         
         Country Information:
-        - Capital: {capital}
-        - Population: {population:,}
-        - Area: {area:,} km²
-        - Region: {region}
-        - Languages: {', '.join(languages)}
+        - Capital: {country_data['capital']}
+        - Population: {country_data['population']:,}
+        - Area: {country_data['area']:,} km²
+        - Region: {country_data['region']}
+        - Languages: {', '.join(country_data['languages'])}
+        - Currency: {', '.join(country_data['currencies'])}
         
-        Please include:
-        1. A brief introduction to the country
-        2. Recommended itinerary for {duration} days
-        3. Must-visit attractions and hidden gems
-        4. Local cuisine recommendations
-        5. Cultural tips and etiquette
-        6. Budget recommendations for {traveler_type}
-        7. Transportation advice
+        Please provide:
+        1. Best travel itinerary for {duration} days
+        2. Seasonal weather analysis for {season}
+        3. Cultural etiquette and tips
+        4. Budget recommendations for {traveler_type}
+        5. Must-try local foods
+        6. Hidden gems and off-the-beaten-path locations
+        7. Safety considerations
         
-        Make it engaging and practical for someone actually planning to visit!
+        Make it practical and engaging!
         """
         
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            return f"Error generating travel guide: {str(e)}"
+        response = gemini_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"❌ Error generating analysis: {str(e)}"
 
-    def generate_country_comparison(self, country1_data, country2_data, aspect):
-        """Generate a comparison between two countries"""
-        if not self.gemini_available:
-            return "Gemini API not configured. Please check your API key."
-        
-        country1_name = country1_data.get('name', {}).get('common', 'Unknown')
-        country2_name = country2_data.get('name', {}).get('common', 'Unknown')
-        
+def generate_economic_analysis(country_data, focus_area):
+    """Generate economic analysis using Gemini"""
+    if not gemini_model:
+        return "⚠️ Gemini AI is not available."
+    
+    try:
         prompt = f"""
-        Compare {country1_name} and {country2_name} focusing on {aspect}.
+        Provide an economic analysis of {country_data['name']} focusing on {focus_area}.
         
-        {country1_name}:
-        - Population: {country1_data.get('population', 0):,}
-        - Area: {country1_data.get('area', 0):,} km²
-        - Region: {country1_data.get('region', 'Unknown')}
-        - Capital: {country1_data.get('capital', ['Unknown'])[0] if country1_data.get('capital') else 'Unknown'}
-        - Languages: {list(country1_data.get('languages', {}).values()) if country1_data.get('languages') else ['Unknown']}
+        Country Data:
+        - Population: {country_data['population']:,}
+        - Area: {country_data['area']:,} km²
+        - Region: {country_data['region']}
+        - Languages: {', '.join(country_data['languages'])}
+        - Currency: {', '.join(country_data['currencies'])}
         
-        {country2_name}:
-        - Population: {country2_data.get('population', 0):,}
-        - Area: {country2_data.get('area', 0):,} km²
-        - Region: {country2_data.get('region', 'Unknown')}
-        - Capital: {country2_data.get('capital', ['Unknown'])[0] if country2_data.get('capital') else 'Unknown'}
-        - Languages: {list(country2_data.get('languages', {}).values()) if country2_data.get('languages') else ['Unknown']}
+        Focus Area: {focus_area}
+        
+        Please analyze:
+        1. Current economic status
+        2. Key industries and GDP contributors
+        3. {focus_area} specific analysis
+        4. Growth opportunities
+        5. Challenges and risks
+        6. Investment climate
+        7. Future economic outlook
+        
+        Provide data-driven insights and practical information.
+        """
+        
+        response = gemini_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+def generate_country_comparison(country1_data, country2_data, comparison_aspect):
+    """Generate comparison between two countries"""
+    if not gemini_model:
+        return "⚠️ Gemini AI is not available."
+    
+    try:
+        prompt = f"""
+        Compare {country1_data['name']} and {country2_data['name']} focusing on {comparison_aspect}.
+        
+        {country1_data['name']}:
+        - Capital: {country1_data['capital']}
+        - Population: {country1_data['population']:,}
+        - Area: {country1_data['area']:,} km²
+        - Region: {country1_data['region']}
+        - Languages: {', '.join(country1_data['languages'])}
+        
+        {country2_data['name']}:
+        - Capital: {country2_data['capital']}
+        - Population: {country2_data['population']:,}
+        - Area: {country2_data['area']:,} km²
+        - Region: {country2_data['region']}
+        - Languages: {', '.join(country2_data['languages'])}
+        
+        Comparison Aspect: {comparison_aspect}
         
         Provide a detailed comparison covering:
-        1. Key similarities and differences in {aspect}
-        2. Cultural aspects related to {aspect}
-        3. Economic or developmental perspectives
-        4. Unique advantages of each country
-        5. Interesting facts or insights
+        1. Key similarities and differences
+        2. Strengths and weaknesses in {comparison_aspect}
+        3. Cultural aspects
+        4. Development indicators
+        5. Recommendations based on {comparison_aspect}
+        6. Interesting insights and facts
         
-        Make the comparison informative and engaging!
+        Make it informative and engaging!
         """
         
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            return f"Error generating comparison: {str(e)}"
+        response = gemini_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
+# ---------- Main App ----------
 def main():
-    st.markdown('<div class="ai-header"><h1>🤖 AI-Powered Country Insights</h1><p>Generate detailed travel guides and country comparisons using Google Gemini</p></div>', unsafe_allow_html=True)
+    st.sidebar.header("⚙️ Analysis Settings")
     
-    # Initialize insights generator
-    insights = CountryInsights()
-    
-    if not insights.gemini_available:
+    if not gemini_model:
         st.warning("""
-        ⚠️ Gemini API not configured. To use this page:
+        ⚠️ Gemini AI is not available. To enable AI features:
         1. Get a free API key from https://aistudio.google.com/app/apikey
-        2. Add it to your Streamlit secrets as GEMINI_API_KEY
+        2. Add it to Streamlit Cloud secrets as `GEMINI_API_KEY`
         3. Redeploy your app
         """)
+    else:
+        st.sidebar.success("✅ Gemini AI is ready!")
     
-    # Tab layout for different functionalities
-    tab1, tab2 = st.tabs(["🎒 Travel Guide Generator", "📊 Country Comparison"])
+    # Tab Layout
+    tab1, tab2, tab3 = st.tabs(["🧳 Travel Analysis", "💰 Economic Analysis", "📊 Country Comparison"])
     
     with tab1:
-        st.subheader("Generate Personalized Travel Guides")
+        st.subheader("AI-Powered Travel Planning")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # User Input 1: Country selection
-            country_name = st.text_input(
-                "Enter a country name:",
-                placeholder="e.g., France, Japan, Brazil...",
-                help="Enter the name of the country you want to visit"
-            )
+        with st.container():
+            col1, col2, col3 = st.columns(3)
             
-            # User Input 2: Traveler type
-            traveler_type = st.selectbox(
-                "Type of traveler:",
-                ["Backpacker/Budget", "Family", "Luxury", "Adventure", "Cultural", "Business"],
-                help="Select the type of travel experience you're looking for"
-            )
-        
-        with col2:
-            # User Input 3: Trip duration
+            with col1:
+                country_name = st.text_input(
+                    "Country to visit:",
+                    placeholder="e.g., Japan, France, Brazil...",
+                    key="travel_country"
+                )
+                
+            with col2:
+                traveler_type = st.selectbox(
+                    "Traveler Type:",
+                    ["Backpacker", "Family", "Luxury", "Adventure", "Cultural", "Business", "Student"],
+                    key="traveler_type"
+                )
+                
+            with col3:
+                season = st.selectbox(
+                    "Travel Season:",
+                    ["Spring", "Summer", "Fall", "Winter", "Any"],
+                    key="season"
+                )
+            
             duration = st.slider(
-                "Trip duration (days):",
+                "Trip Duration (days):",
                 min_value=3,
-                max_value=21,
+                max_value=30,
                 value=7,
                 step=1,
-                help="How many days will you be traveling?"
+                key="duration"
             )
             
-            # User Input 4: Travel focus
-            travel_focus = st.multiselect(
-                "Interests:",
-                ["History", "Food", "Nature", "Cities", "Beaches", "Mountains", "Culture", "Nightlife"],
-                default=["Culture", "Food"],
-                help="Select your main interests"
-            )
-        
-        if st.button("🎯 Generate Travel Guide", type="primary"):
-            if country_name:
-                with st.spinner(f"🧳 Creating your perfect {duration}-day {traveler_type.lower()} itinerary for {country_name}..."):
-                    country_data = insights.get_country_data(country_name)
-                    
-                    if country_data:
-                        travel_guide = insights.generate_travel_guide(country_data, traveler_type, duration)
+            if st.button("🧭 Generate Travel Analysis", type="primary", use_container_width=True):
+                if country_name:
+                    with st.spinner(f"✈️ Creating your {duration}-day {traveler_type.lower()} itinerary for {country_name}..."):
+                        country_data = fetch_country_data(country_name)
                         
-                        st.subheader(f"🎒 {duration}-Day {traveler_type} Guide for {country_name}")
-                        st.markdown(f'<div class="insight-card">{travel_guide}</div>', unsafe_allow_html=True)
-                        
-                        # Display basic country info
-                        col_info1, col_info2, col_info3 = st.columns(3)
-                        with col_info1:
-                            st.metric("Capital", country_data.get('capital', ['Unknown'])[0] if country_data.get('capital') else 'Unknown')
-                        with col_info2:
-                            st.metric("Population", f"{country_data.get('population', 0):,}")
-                        with col_info3:
-                            languages = list(country_data.get('languages', {}).values()) if country_data.get('languages') else ['Unknown']
-                            st.metric("Languages", ", ".join(languages[:2]) + ("..." if len(languages) > 2 else ""))
-                    else:
-                        st.error(f"❌ Could not find data for '{country_name}'. Please check the spelling and try again.")
-            else:
-                st.warning("⚠️ Please enter a country name.")
+                        if country_data:
+                            analysis = generate_travel_analysis(country_data, traveler_type, season, duration)
+                            
+                            st.markdown(f'<div class="analysis-card">{analysis}</div>', unsafe_allow_html=True)
+                            
+                            # Display country metrics
+                            st.subheader("📈 Country Overview")
+                            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+                            
+                            with col_metrics1:
+                                st.metric("Capital", country_data['capital'])
+                            with col_metrics2:
+                                st.metric("Population", f"{country_data['population']:,}")
+                            with col_metrics3:
+                                st.metric("Area", f"{country_data['area']:,} km²")
+                            with col_metrics4:
+                                st.metric("Languages", len(country_data['languages']))
+                        else:
+                            st.error(f"❌ Could not find data for '{country_name}'")
+                else:
+                    st.warning("⚠️ Please enter a country name")
     
     with tab2:
-        st.subheader("Compare Two Countries")
+        st.subheader("Economic & Development Analysis")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # User Input 1: First country
-            country1 = st.text_input(
-                "First country:",
-                placeholder="e.g., United States",
-                key="country1"
-            )
-        
-        with col2:
-            # User Input 2: Second country
-            country2 = st.text_input(
-                "Second country:",
-                placeholder="e.g., China", 
-                key="country2"
-            )
-        
-        # User Input 3: Comparison aspect
-        comparison_aspect = st.selectbox(
-            "Compare based on:",
-            ["Culture and Lifestyle", "Economic Development", "Tourism and Attractions", 
-             "Geography and Climate", "History and Heritage", "Overall Quality of Life"],
-            help="Select what aspect you want to compare"
-        )
-        
-        if st.button("📈 Generate Comparison", type="primary"):
-            if country1 and country2:
-                with st.spinner(f"🔍 Analyzing {country1} vs {country2}..."):
-                    country1_data, country2_data = insights.get_country_comparison(country1, country2)
-                    
-                    if country1_data and country2_data:
-                        comparison = insights.generate_country_comparison(
-                            country1_data, country2_data, comparison_aspect
-                        )
+        with st.container():
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                country_name = st.text_input(
+                    "Country to analyze:",
+                    placeholder="e.g., Germany, India, Australia...",
+                    key="economic_country"
+                )
+                
+            with col2:
+                focus_area = st.selectbox(
+                    "Analysis Focus:",
+                    ["Technology & Innovation", "Agriculture", "Manufacturing", 
+                     "Tourism", "Healthcare", "Education", "Infrastructure", 
+                     "Renewable Energy", "Overall Economy"],
+                    key="focus_area"
+                )
+            
+            if st.button("📊 Generate Economic Analysis", type="primary", use_container_width=True):
+                if country_name:
+                    with st.spinner(f"📈 Analyzing {focus_area.lower()} in {country_name}..."):
+                        country_data = fetch_country_data(country_name)
                         
-                        st.subheader(f"⚖️ {country1} vs {country2}: {comparison_aspect}")
-                        st.markdown(f'<div class="insight-card">{comparison}</div>', unsafe_allow_html=True)
+                        if country_data:
+                            analysis = generate_economic_analysis(country_data, focus_area)
+                            
+                            st.markdown(f'<div class="analysis-card">{analysis}</div>', unsafe_allow_html=True)
+                            
+                            # Create visualizations
+                            st.subheader("📊 Economic Indicators")
+                            
+                            # Population distribution chart
+                            pop_data = pd.DataFrame({
+                                'Category': ['Urban Population', 'Rural Population'],
+                                'Percentage': [70, 30]  # Example data - in real app, use API data
+                            })
+                            
+                            fig = px.pie(pop_data, values='Percentage', names='Category', 
+                                       title="Population Distribution",
+                                       color_discrete_sequence=px.colors.qualitative.Set3)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                        else:
+                            st.error(f"❌ Could not find data for '{country_name}'")
+                else:
+                    st.warning("⚠️ Please enter a country name")
+    
+    with tab3:
+        st.subheader("Country Comparison Analysis")
+        
+        with st.container():
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                country1 = st.text_input(
+                    "First country:",
+                    placeholder="e.g., United States",
+                    key="country1"
+                )
+                
+            with col2:
+                country2 = st.text_input(
+                    "Second country:",
+                    placeholder="e.g., China",
+                    key="country2"
+                )
+                
+            with col3:
+                comparison_aspect = st.selectbox(
+                    "Comparison Aspect:",
+                    ["Economy", "Culture", "Tourism", "Education", 
+                     "Healthcare", "Technology", "Quality of Life", "Overall Development"],
+                    key="comparison_aspect"
+                )
+            
+            if st.button("⚖️ Generate Comparison", type="primary", use_container_width=True):
+                if country1 and country2:
+                    with st.spinner(f"🔍 Comparing {country1} and {country2}..."):
+                        country1_data, country2_data = fetch_comparison_data(country1, country2)
                         
-                        # Quick stats comparison
-                        st.subheader("📊 Quick Stats Comparison")
-                        col_stat1, col_stat2 = st.columns(2)
-                        
-                        with col_stat1:
-                            st.metric(
-                                f"🇺🇸 {country1} Population", 
-                                f"{country1_data.get('population', 0):,}",
-                                delta=None
+                        if country1_data and country2_data:
+                            comparison = generate_country_comparison(
+                                country1_data, country2_data, comparison_aspect
                             )
-                            st.metric(
-                                f"🇺🇸 {country1} Area", 
-                                f"{country1_data.get('area', 0):,} km²",
-                                delta=None
-                            )
-                        
-                        with col_stat2:
-                            st.metric(
-                                f"🇨🇳 {country2} Population", 
-                                f"{country2_data.get('population', 0):,}",
-                                delta=None
-                            )
-                            st.metric(
-                                f"🇨🇳 {country2} Area", 
-                                f"{country2_data.get('area', 0):,} km²", 
-                                delta=None
-                            )
-                    
-                    else:
-                        missing = []
-                        if not country1_data: missing.append(country1)
-                        if not country2_data: missing.append(country2)
-                        st.error(f"❌ Could not find data for: {', '.join(missing)}")
-            else:
-                st.warning("⚠️ Please enter both country names.")
-
+                            
+                            st.markdown(f'<div class="analysis-card">{comparison}</div>', unsafe_allow_html=True)
+                            
+                            # Side-by-side metrics
+                            st.subheader("📊 Quick Stats Comparison")
+                            
+                            col_stat1, col_stat2 = st.columns(2)
+                            
+                            with col_stat1:
+                                st.markdown(f"### {country1_data['flag']} {country1_data['name']}")
+                                st.metric("Population", f"{country1_data['population']:,}")
+                                st.metric("Area", f"{country1_data['area']:,} km²")
+                                st.metric("Capital", country1_data['capital'])
+                                st.metric("Languages", len(country1_data['languages']))
+                            
+                            with col_stat2:
+                                st.markdown(f"### {country2_data['flag']} {country2_data['name']}")
+                                st.metric("Population", f"{country2_data['population']:,}")
+                                st.metric("Area", f"{country2_data['area']:,} km²")
+                                st.metric("Capital", country2_data['capital'])
+                                st.metric("Languages", len(country2_data['languages']))
+                            
+                        else:
+                            missing = []
+                            if not country1_data: missing.append(country1)
+                            if not country2_data: missing.append(country2)
+                            st.error(f"❌ Could not find data for: {', '.join(missing)}")
+                else:
+                    st.warning("⚠️ Please enter both country names")
+    
     # Footer
     st.markdown("---")
-    st.caption("💡 Powered by Google Gemini AI • Data from REST Countries API")
+    st.caption("🤖 Powered by Google Gemini AI • 📊 Data from REST Countries API • Phase 3: Advanced AI Analysis")
 
 if __name__ == "__main__":
     main()
