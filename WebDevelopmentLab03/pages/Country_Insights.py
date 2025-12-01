@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
 import google.generativeai as genai
-import pandas as pd
-import plotly.express as px
 
 # ---------- Page Configuration ----------
 st.set_page_config(
@@ -35,6 +33,23 @@ st.markdown("""
         padding: 1rem;
         border-radius: 10px;
         text-align: center;
+    }
+    .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+    }
+    .comparison-table th, .comparison-table td {
+        border: 1px solid #ddd;
+        padding: 12px;
+        text-align: center;
+    }
+    .comparison-table th {
+        background-color: #667eea;
+        color: white;
+    }
+    .comparison-table tr:nth-child(even) {
+        background-color: #f2f2f2;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -221,6 +236,10 @@ def generate_country_comparison(country1_data, country2_data, comparison_aspect)
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
+def format_number(num):
+    """Format large numbers with commas"""
+    return f"{num:,}"
+
 # ---------- Main App ----------
 def main():
     st.sidebar.header("⚙️ Analysis Settings")
@@ -291,11 +310,26 @@ def main():
                             with col_metrics1:
                                 st.metric("Capital", country_data['capital'])
                             with col_metrics2:
-                                st.metric("Population", f"{country_data['population']:,}")
+                                st.metric("Population", format_number(country_data['population']))
                             with col_metrics3:
-                                st.metric("Area", f"{country_data['area']:,} km²")
+                                st.metric("Area", f"{format_number(country_data['area'])} km²")
                             with col_metrics4:
                                 st.metric("Languages", len(country_data['languages']))
+                            
+                            # Display flag and basic info
+                            st.subheader(f"{country_data['flag']} Quick Facts")
+                            col_info1, col_info2 = st.columns(2)
+                            
+                            with col_info1:
+                                st.info(f"**Official Name:** {country_data['official_name']}")
+                                st.info(f"**Region:** {country_data['region']}")
+                                st.info(f"**Subregion:** {country_data['subregion']}")
+                                
+                            with col_info2:
+                                st.info(f"**Currency:** {', '.join(country_data['currencies'])}")
+                                st.info(f"**Timezones:** {', '.join(country_data['timezones'][:3])}")
+                                if len(country_data['timezones']) > 3:
+                                    st.caption(f"... and {len(country_data['timezones']) - 3} more")
                         else:
                             st.error(f"❌ Could not find data for '{country_name}'")
                 else:
@@ -333,19 +367,69 @@ def main():
                             
                             st.markdown(f'<div class="analysis-card">{analysis}</div>', unsafe_allow_html=True)
                             
-                            # Create visualizations
-                            st.subheader("📊 Economic Indicators")
+                            # Create simple visualizations without pandas
+                            st.subheader("📊 Country Statistics")
                             
-                            # Population distribution chart
-                            pop_data = pd.DataFrame({
-                                'Category': ['Urban Population', 'Rural Population'],
-                                'Percentage': [70, 30]  # Example data - in real app, use API data
-                            })
+                            # Display metrics in a grid
+                            col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
                             
-                            fig = px.pie(pop_data, values='Percentage', names='Category', 
-                                       title="Population Distribution",
-                                       color_discrete_sequence=px.colors.qualitative.Set3)
-                            st.plotly_chart(fig, use_container_width=True)
+                            with col_stat1:
+                                st.metric("Population", format_number(country_data['population']))
+                            with col_stat2:
+                                # Calculate population density
+                                density = country_data['population'] / country_data['area'] if country_data['area'] > 0 else 0
+                                st.metric("Density", f"{density:,.1f}/km²")
+                            with col_stat3:
+                                st.metric("Area", f"{format_number(country_data['area'])} km²")
+                            with col_stat4:
+                                st.metric("Languages", len(country_data['languages']))
+                            
+                            # Create a simple bar chart using Streamlit's native bar_chart with manual data
+                            st.subheader("📈 Development Indicators (Example Data)")
+                            
+                            # Manually create data for bar chart
+                            chart_data = {
+                                'GDP Growth': [3.5, 2.8],
+                                'Literacy Rate': [92, 86],
+                                'Life Expectancy': [78, 72],
+                                'Internet Users': [85, 65]
+                            }
+                            
+                            # Use Streamlit's native chart
+                            st.bar_chart(chart_data)
+                            st.caption("Blue: Example country data | Orange: World average (sample data)")
+                            
+                            # Quick facts table using Streamlit's native table
+                            st.subheader("📝 Key Facts")
+                            
+                            # Create table data manually
+                            table_data = {
+                                "Fact": ["Capital City", "Official Languages", "Currency", "Region", "Timezones"],
+                                "Value": [
+                                    country_data['capital'],
+                                    ", ".join(country_data['languages'][:3]) + ("..." if len(country_data['languages']) > 3 else ""),
+                                    ", ".join(country_data['currencies']),
+                                    country_data['region'],
+                                    str(len(country_data['timezones']))
+                                ]
+                            }
+                            
+                            # Display as markdown table
+                            st.markdown("""
+                            | Fact | Value |
+                            |------|-------|
+                            | Capital City | {} |
+                            | Official Languages | {} |
+                            | Currency | {} |
+                            | Region | {} |
+                            | Timezones | {} |
+                            """.format(
+                                table_data["Value"][0],
+                                table_data["Value"][1],
+                                table_data["Value"][2],
+                                table_data["Value"][3],
+                                table_data["Value"][4]
+                            ))
                             
                         else:
                             st.error(f"❌ Could not find data for '{country_name}'")
@@ -399,17 +483,97 @@ def main():
                             
                             with col_stat1:
                                 st.markdown(f"### {country1_data['flag']} {country1_data['name']}")
-                                st.metric("Population", f"{country1_data['population']:,}")
-                                st.metric("Area", f"{country1_data['area']:,} km²")
+                                st.metric("Population", format_number(country1_data['population']))
+                                st.metric("Area", f"{format_number(country1_data['area'])} km²")
                                 st.metric("Capital", country1_data['capital'])
                                 st.metric("Languages", len(country1_data['languages']))
+                                
+                                # Additional info
+                                with st.expander("More Details"):
+                                    st.write(f"**Official Name:** {country1_data['official_name']}")
+                                    st.write(f"**Region:** {country1_data['region']}")
+                                    st.write(f"**Subregion:** {country1_data['subregion']}")
+                                    st.write(f"**Currency:** {', '.join(country1_data['currencies'])}")
+                                    st.write(f"**Timezones:** {len(country1_data['timezones'])}")
                             
                             with col_stat2:
                                 st.markdown(f"### {country2_data['flag']} {country2_data['name']}")
-                                st.metric("Population", f"{country2_data['population']:,}")
-                                st.metric("Area", f"{country2_data['area']:,} km²")
+                                st.metric("Population", format_number(country2_data['population']))
+                                st.metric("Area", f"{format_number(country2_data['area'])} km²")
                                 st.metric("Capital", country2_data['capital'])
                                 st.metric("Languages", len(country2_data['languages']))
+                                
+                                # Additional info
+                                with st.expander("More Details"):
+                                    st.write(f"**Official Name:** {country2_data['official_name']}")
+                                    st.write(f"**Region:** {country2_data['region']}")
+                                    st.write(f"**Subregion:** {country2_data['subregion']}")
+                                    st.write(f"**Currency:** {', '.join(country2_data['currencies'])}")
+                                    st.write(f"**Timezones:** {len(country2_data['timezones'])}")
+                            
+                            # Create comparison table without pandas
+                            st.subheader("📈 Direct Comparison")
+                            
+                            # Create comparison table using HTML/CSS
+                            st.markdown("""
+                            <table class="comparison-table">
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>{}</th>
+                                    <th>{}</th>
+                                </tr>
+                                <tr>
+                                    <td>Population</td>
+                                    <td>{}</td>
+                                    <td>{}</td>
+                                </tr>
+                                <tr>
+                                    <td>Area (km²)</td>
+                                    <td>{}</td>
+                                    <td>{}</td>
+                                </tr>
+                                <tr>
+                                    <td>Languages Count</td>
+                                    <td>{}</td>
+                                    <td>{}</td>
+                                </tr>
+                                <tr>
+                                    <td>Capital</td>
+                                    <td>{}</td>
+                                    <td>{}</td>
+                                </tr>
+                                <tr>
+                                    <td>Region</td>
+                                    <td>{}</td>
+                                    <td>{}</td>
+                                </tr>
+                            </table>
+                            """.format(
+                                country1_data['name'], country2_data['name'],
+                                format_number(country1_data['population']), format_number(country2_data['population']),
+                                format_number(country1_data['area']), format_number(country2_data['area']),
+                                len(country1_data['languages']), len(country2_data['languages']),
+                                country1_data['capital'], country2_data['capital'],
+                                country1_data['region'], country2_data['region']
+                            ), unsafe_allow_html=True)
+                            
+                            # Add a simple bar chart using Streamlit's native bar_chart
+                            st.subheader("📊 Comparison Chart")
+                            
+                            # Prepare data for bar chart
+                            chart_data = {
+                                'Population (millions)': [
+                                    country1_data['population'] / 1000000,
+                                    country2_data['population'] / 1000000
+                                ],
+                                'Area (thousand km²)': [
+                                    country1_data['area'] / 1000,
+                                    country2_data['area'] / 1000
+                                ]
+                            }
+                            
+                            # Create chart
+                            st.bar_chart(chart_data)
                             
                         else:
                             missing = []
