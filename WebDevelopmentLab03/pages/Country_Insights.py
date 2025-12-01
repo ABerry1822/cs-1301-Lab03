@@ -2,6 +2,44 @@ import streamlit as st
 import requests
 import google.generativeai as genai
 import os
+def __init__(self):
+    self.base_url = "https://restcountries.com/v3.1"
+    self.session = requests.Session()
+    
+    # Configure Gemini with detailed debugging
+    st.sidebar.header("🚀 Gemini Initialization Debug")
+    
+    try:
+        # Check if secret exists
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.sidebar.error("❌ GEMINI_API_KEY not found in st.secrets!")
+            st.sidebar.write("Available secrets:", list(st.secrets.keys()))
+            self.gemini_available = False
+            return
+        
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.sidebar.success(f"✅ API Key found: {api_key[:12]}...")
+        
+        # Configure Gemini
+        genai.configure(api_key=api_key)
+        st.sidebar.success("✅ genai.configure() successful")
+        
+        # 🎯 FIX: Use gemini-1.5-flash instead of gemini-pro
+        self.model = genai.GenerativeModel('gemini-1.5-flash')  # ← CHANGE THIS LINE
+        st.sidebar.success("✅ GenerativeModel created with gemini-1.5-flash")
+        
+        # Test the connection with a simple request
+        st.sidebar.write("🧪 Testing API connection...")
+        test_response = self.model.generate_content("Say 'Hello' in 3 words.")
+        st.sidebar.success(f"✅ API Test Successful: '{test_response.text}'")
+        
+        self.gemini_available = True
+        st.sidebar.success("🎉 Gemini is fully available!")
+        
+    except Exception as e:
+        st.sidebar.error(f"❌ Initialization Failed: {str(e)}")
+        st.sidebar.error(f"📋 Error Type: {type(e).__name__}")
+        self.gemini_available = False
 class CountryInsights:
     def __init__(self):
         self.base_url = "https://restcountries.com/v3.1"
