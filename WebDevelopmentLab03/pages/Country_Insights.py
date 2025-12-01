@@ -51,11 +51,17 @@ st.markdown("""
     .comparison-table tr:nth-child(even) {
         background-color: #f2f2f2;
     }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        border-radius: 8px;
+        padding: 0 16px;
+    }
 </style>
 """, unsafe_allow_html=True)
-
-# ---------- Header ----------
-st.markdown('<div class="main-header"><h1>🤖 AI-Powered Country Analysis</h1><p>Advanced country insights powered by Google Gemini AI</p></div>', unsafe_allow_html=True)
 
 # ---------- Initialize Gemini ----------
 @st.cache_resource
@@ -63,31 +69,50 @@ def init_gemini():
     """Initialize Gemini AI with error handling"""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
-            st.sidebar.error("⚠️ GEMINI_API_KEY not found!")
+            st.sidebar.error("⚠️ GEMINI_API_KEY not found in secrets!")
             return None
         
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        api_key = st.secrets["GEMINI_API_KEY"]
         
-        # Try different models
-        models_to_try = ["gemini-pro", "gemini-1.0-pro", "models/gemini-pro"]
+        # Validate key format
+        if not api_key or not api_key.startswith("AIza"):
+            st.sidebar.error("❌ Invalid API key format (should start with 'AIza')")
+            return None
+        
+        genai.configure(api_key=api_key)
+        
+        # Try different models in order (newest first)
+        models_to_try = [
+            "gemini-1.5-flash",      # Most likely to work for new accounts
+            "gemini-1.0-pro",        # Alternative
+            "gemini-pro",            # Original model name
+            "models/gemini-1.5-flash" # Full path
+        ]
         
         for model_name in models_to_try:
             try:
                 model = genai.GenerativeModel(model_name)
-                # Quick test
-                response = model.generate_content("Test")
-                st.sidebar.success(f"✅ Using {model_name}")
-                return model
-            except:
-                continue
+                # Quick test with simple prompt
+                test_response = model.generate_content("Hello")
+                if test_response.text:
+                    st.sidebar.success(f"✅ Gemini ready: {model_name}")
+                    return model
+            except Exception as e:
+                st.sidebar.warning(f"⚠️ {model_name} failed: {str(e)[:50]}")
+                continue  # Try next model
         
+        st.sidebar.error("❌ All Gemini models failed")
         return None
+        
     except Exception as e:
-        st.sidebar.error(f"❌ Gemini Error: {str(e)}")
+        st.sidebar.error(f"❌ Gemini initialization error: {str(e)[:100]}")
         return None
 
 # Initialize Gemini
 gemini_model = init_gemini()
+
+# ---------- Header ----------
+st.markdown('<div class="main-header"><h1>🤖 AI-Powered Country Analysis</h1><p>Advanced country insights powered by Google Gemini AI</p></div>', unsafe_allow_html=True)
 
 # ---------- REST Countries API Helper ----------
 def fetch_country_data(country_name):
@@ -124,7 +149,7 @@ def fetch_comparison_data(country1, country2):
 def generate_travel_analysis(country_data, traveler_type, season, duration):
     """Generate travel analysis using Gemini"""
     if not gemini_model:
-        return "⚠️ Gemini AI is not available. Please check your API key configuration."
+        return "⚠️ Gemini AI is not available. Please check your API key configuration in Streamlit secrets."
     
     try:
         prompt = f"""
@@ -158,12 +183,12 @@ def generate_travel_analysis(country_data, traveler_type, season, duration):
         response = gemini_model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"❌ Error generating analysis: {str(e)}"
+        return f"❌ Error generating analysis: {str(e)[:150]}"
 
 def generate_economic_analysis(country_data, focus_area):
     """Generate economic analysis using Gemini"""
     if not gemini_model:
-        return "⚠️ Gemini AI is not available."
+        return "⚠️ Gemini AI is not available. Please check your API key configuration."
     
     try:
         prompt = f"""
@@ -193,7 +218,7 @@ def generate_economic_analysis(country_data, focus_area):
         response = gemini_model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return f"❌ Error: {str(e)[:150]}"
 
 def generate_country_comparison(country1_data, country2_data, comparison_aspect):
     """Generate comparison between two countries"""
@@ -234,11 +259,14 @@ def generate_country_comparison(country1_data, country2_data, comparison_aspect)
         response = gemini_model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return f"❌ Error: {str(e)[:150]}"
 
 def format_number(num):
     """Format large numbers with commas"""
-    return f"{num:,}"
+    try:
+        return f"{int(num):,}"
+    except:
+        return str(num)
 
 # ---------- Main App ----------
 def main():
@@ -249,7 +277,8 @@ def main():
         ⚠️ Gemini AI is not available. To enable AI features:
         1. Get a free API key from https://aistudio.google.com/app/apikey
         2. Add it to Streamlit Cloud secrets as `GEMINI_API_KEY`
-        3. Redeploy your app
+        3. Wait 2-3 minutes after creating the key
+        4. Redeploy your app
         """)
     else:
         st.sidebar.success("✅ Gemini AI is ready!")
@@ -327,11 +356,11 @@ def main():
                                 
                             with col_info2:
                                 st.info(f"**Currency:** {', '.join(country_data['currencies'])}")
-                                st.info(f"**Timezones:** {', '.join(country_data['timezones'][:3])}")
-                                if len(country_data['timezones']) > 3:
-                                    st.caption(f"... and {len(country_data['timezones']) - 3} more")
+                                tz_count = len(country_data['timezones'])
+                                st.info(f"**Timezones:** {tz_count} ({', '.join(country_data['timezones'][:2])}{'...' if tz_count > 2 else ''})")
+                                
                         else:
-                            st.error(f"❌ Could not find data for '{country_name}'")
+                            st.error(f"❌ Could not find data for '{country_name}'. Please check spelling.")
                 else:
                     st.warning("⚠️ Please enter a country name")
     
@@ -367,10 +396,9 @@ def main():
                             
                             st.markdown(f'<div class="analysis-card">{analysis}</div>', unsafe_allow_html=True)
                             
-                            # Create simple visualizations without pandas
+                            # Display metrics
                             st.subheader("📊 Country Statistics")
                             
-                            # Display metrics in a grid
                             col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
                             
                             with col_stat1:
@@ -384,55 +412,36 @@ def main():
                             with col_stat4:
                                 st.metric("Languages", len(country_data['languages']))
                             
-                            # Create a simple bar chart using Streamlit's native bar_chart with manual data
-                            st.subheader("📈 Development Indicators (Example Data)")
+                            # Create a simple bar chart
+                            st.subheader("📈 Development Indicators")
                             
-                            # Manually create data for bar chart
+                            # Manual chart data
                             chart_data = {
-                                'GDP Growth': [3.5, 2.8],
-                                'Literacy Rate': [92, 86],
-                                'Life Expectancy': [78, 72],
-                                'Internet Users': [85, 65]
+                                "GDP Growth": [3.5, 2.8],
+                                "Literacy Rate": [92, 86],
+                                "Life Expectancy": [78, 72],
+                                "Internet Users": [85, 65]
                             }
                             
-                            # Use Streamlit's native chart
                             st.bar_chart(chart_data)
-                            st.caption("Blue: Example country data | Orange: World average (sample data)")
+                            st.caption("Blue: Estimated country data | Orange: World average (example)")
                             
-                            # Quick facts table using Streamlit's native table
+                            # Key facts
                             st.subheader("📝 Key Facts")
                             
-                            # Create table data manually
-                            table_data = {
-                                "Fact": ["Capital City", "Official Languages", "Currency", "Region", "Timezones"],
-                                "Value": [
-                                    country_data['capital'],
-                                    ", ".join(country_data['languages'][:3]) + ("..." if len(country_data['languages']) > 3 else ""),
-                                    ", ".join(country_data['currencies']),
-                                    country_data['region'],
-                                    str(len(country_data['timezones']))
-                                ]
-                            }
-                            
-                            # Display as markdown table
-                            st.markdown("""
-                            | Fact | Value |
-                            |------|-------|
-                            | Capital City | {} |
-                            | Official Languages | {} |
-                            | Currency | {} |
-                            | Region | {} |
-                            | Timezones | {} |
-                            """.format(
-                                table_data["Value"][0],
-                                table_data["Value"][1],
-                                table_data["Value"][2],
-                                table_data["Value"][3],
-                                table_data["Value"][4]
-                            ))
+                            # Create a simple table
+                            st.markdown(f"""
+                            | Fact | Details |
+                            |------|---------|
+                            | **Capital City** | {country_data['capital']} |
+                            | **Official Languages** | {', '.join(country_data['languages'][:2])}{'...' if len(country_data['languages']) > 2 else ''} |
+                            | **Currency** | {', '.join(country_data['currencies'])} |
+                            | **Region** | {country_data['region']} |
+                            | **Timezones** | {len(country_data['timezones'])} |
+                            """)
                             
                         else:
-                            st.error(f"❌ Could not find data for '{country_name}'")
+                            st.error(f"❌ Could not find data for '{country_name}'. Please check spelling.")
                 else:
                     st.warning("⚠️ Please enter a country name")
     
@@ -511,54 +520,47 @@ def main():
                                     st.write(f"**Currency:** {', '.join(country2_data['currencies'])}")
                                     st.write(f"**Timezones:** {len(country2_data['timezones'])}")
                             
-                            # Create comparison table without pandas
+                            # Create comparison table
                             st.subheader("📈 Direct Comparison")
                             
-                            # Create comparison table using HTML/CSS
-                            st.markdown("""
+                            # Create HTML table for comparison
+                            st.markdown(f"""
                             <table class="comparison-table">
                                 <tr>
                                     <th>Metric</th>
-                                    <th>{}</th>
-                                    <th>{}</th>
+                                    <th>{country1_data['name']}</th>
+                                    <th>{country2_data['name']}</th>
                                 </tr>
                                 <tr>
-                                    <td>Population</td>
-                                    <td>{}</td>
-                                    <td>{}</td>
+                                    <td><strong>Population</strong></td>
+                                    <td>{format_number(country1_data['population'])}</td>
+                                    <td>{format_number(country2_data['population'])}</td>
                                 </tr>
                                 <tr>
-                                    <td>Area (km²)</td>
-                                    <td>{}</td>
-                                    <td>{}</td>
+                                    <td><strong>Area (km²)</strong></td>
+                                    <td>{format_number(country1_data['area'])}</td>
+                                    <td>{format_number(country2_data['area'])}</td>
                                 </tr>
                                 <tr>
-                                    <td>Languages Count</td>
-                                    <td>{}</td>
-                                    <td>{}</td>
+                                    <td><strong>Languages</strong></td>
+                                    <td>{len(country1_data['languages'])}</td>
+                                    <td>{len(country2_data['languages'])}</td>
                                 </tr>
                                 <tr>
-                                    <td>Capital</td>
-                                    <td>{}</td>
-                                    <td>{}</td>
+                                    <td><strong>Capital</strong></td>
+                                    <td>{country1_data['capital']}</td>
+                                    <td>{country2_data['capital']}</td>
                                 </tr>
                                 <tr>
-                                    <td>Region</td>
-                                    <td>{}</td>
-                                    <td>{}</td>
+                                    <td><strong>Region</strong></td>
+                                    <td>{country1_data['region']}</td>
+                                    <td>{country2_data['region']}</td>
                                 </tr>
                             </table>
-                            """.format(
-                                country1_data['name'], country2_data['name'],
-                                format_number(country1_data['population']), format_number(country2_data['population']),
-                                format_number(country1_data['area']), format_number(country2_data['area']),
-                                len(country1_data['languages']), len(country2_data['languages']),
-                                country1_data['capital'], country2_data['capital'],
-                                country1_data['region'], country2_data['region']
-                            ), unsafe_allow_html=True)
+                            """, unsafe_allow_html=True)
                             
-                            # Add a simple bar chart using Streamlit's native bar_chart
-                            st.subheader("📊 Comparison Chart")
+                            # Add a simple bar chart
+                            st.subheader("📊 Visual Comparison")
                             
                             # Prepare data for bar chart
                             chart_data = {
@@ -572,13 +574,14 @@ def main():
                                 ]
                             }
                             
-                            # Create chart
                             st.bar_chart(chart_data)
                             
                         else:
                             missing = []
-                            if not country1_data: missing.append(country1)
-                            if not country2_data: missing.append(country2)
+                            if not country1_data: 
+                                missing.append(country1)
+                            if not country2_data: 
+                                missing.append(country2)
                             st.error(f"❌ Could not find data for: {', '.join(missing)}")
                 else:
                     st.warning("⚠️ Please enter both country names")
