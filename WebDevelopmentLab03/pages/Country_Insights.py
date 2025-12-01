@@ -1,193 +1,7 @@
 import streamlit as st
 import requests
 import google.generativeai as genai
-import os
-def __init__(self):
-    self.base_url = "https://restcountries.com/v3.1"
-    self.session = requests.Session()
-    
-    # Configure Gemini with detailed debugging
-    st.sidebar.header("🚀 Gemini Initialization Debug")
-    
-    try:
-        # Check if secret exists
-        if "GEMINI_API_KEY" not in st.secrets:
-            st.sidebar.error("❌ GEMINI_API_KEY not found in st.secrets!")
-            st.sidebar.write("Available secrets:", list(st.secrets.keys()))
-            self.gemini_available = False
-            return
-        
-        api_key = st.secrets["GEMINI_API_KEY"]
-        st.sidebar.success(f"✅ API Key found: {api_key[:12]}...")
-        
-        # Configure Gemini
-        genai.configure(api_key=api_key)
-        st.sidebar.success("✅ genai.configure() successful")
-        
-        # 🎯 FIX: Use gemini-1.5-flash instead of gemini-pro
-        self.model = genai.GenerativeModel('gemini-1.5-flash')  # ← CHANGE THIS LINE
-        st.sidebar.success("✅ GenerativeModel created with gemini-1.5-flash")
-        
-        # Test the connection with a simple request
-        st.sidebar.write("🧪 Testing API connection...")
-        test_response = self.model.generate_content("Say 'Hello' in 3 words.")
-        st.sidebar.success(f"✅ API Test Successful: '{test_response.text}'")
-        
-        self.gemini_available = True
-        st.sidebar.success("🎉 Gemini is fully available!")
-        
-    except Exception as e:
-        st.sidebar.error(f"❌ Initialization Failed: {str(e)}")
-        st.sidebar.error(f"📋 Error Type: {type(e).__name__}")
-        self.gemini_available = False
-class CountryInsights:
-    def __init__(self):
-        self.base_url = "https://restcountries.com/v3.1"
-        self.session = requests.Session()
-        
-        # Configure Gemini with detailed debugging
-        st.sidebar.header("🚀 Gemini Initialization Debug")
-        
-        try:
-            # Check if secret exists
-            if "GEMINI_API_KEY" not in st.secrets:
-                st.sidebar.error("❌ GEMINI_API_KEY not found in st.secrets!")
-                st.sidebar.write("Available secrets:", list(st.secrets.keys()))
-                self.gemini_available = False
-                return
-            
-            api_key = st.secrets["GEMINI_API_KEY"]
-            st.sidebar.success(f"✅ API Key found: {api_key[:12]}...")
-            st.sidebar.write("🔑 Key length:", len(api_key))
-            
-            # Configure Gemini
-            genai.configure(api_key=api_key)
-            st.sidebar.success("✅ genai.configure() successful")
-            
-            # Create model
-            self.model = genai.GenerativeModel('gemini-pro')
-            st.sidebar.success("✅ GenerativeModel created")
-            
-            # Test the connection with a simple request
-            st.sidebar.write("🧪 Testing API connection...")
-            test_response = self.model.generate_content("Say 'Hello' in 3 words.")
-            st.sidebar.success(f"✅ API Test Successful: '{test_response.text}'")
-            
-            self.gemini_available = True
-            st.sidebar.success("🎉 Gemini is fully available!")
-            
-        except Exception as e:
-            st.sidebar.error(f"❌ Initialization Failed: {str(e)}")
-            st.sidebar.error(f"📋 Error Type: {type(e).__name__}")
-            self.gemini_available = False
 
-# 🎯 ADD THIS TEST BUTTON RIGHT HERE (after class, before main execution)
-st.sidebar.markdown("---")
-if st.sidebar.button("🧪 Test Gemini Connection"):
-    insights = CountryInsights()
-    st.sidebar.write("Final gemini_available:", insights.gemini_available)
-def generate_travel_guide(self, country_data, traveler_type, duration):
-    """Generate a travel guide using Gemini"""
-    st.sidebar.header("🔍 Travel Guide Debug")
-    
-    if not self.gemini_available:
-        st.sidebar.error("❌ Gemini marked as unavailable in class")
-        return "Gemini API not configured. Please check your API key."
-    
-    st.sidebar.success("✅ Gemini is available!")
-    
-    # Test with a VERY simple prompt first
-    test_prompt = "Say 'Hello World' in 5 words or less."
-    
-    st.sidebar.write("🧪 Testing with simple prompt...")
-    try:
-        test_response = self.model.generate_content(test_prompt)
-        st.sidebar.success(f"✅ Simple test worked: '{test_response.text}'")
-    except Exception as e:
-        st.sidebar.error(f"❌ Simple test failed: {str(e)}")
-        return f"AI service error: {str(e)}"
-    
-    # If simple test works, try the actual travel guide
-    country_name = country_data.get('name', {}).get('common', 'Unknown')
-    prompt = f"Create a 3-day travel guide for {country_name} for {traveler_type} travelers. Keep it brief."
-    
-    st.sidebar.write("📝 Trying actual travel guide prompt...")
-    try:
-        response = self.model.generate_content(prompt)
-        st.sidebar.success("✅ Travel guide generated successfully!")
-        return response.text
-    except Exception as e:
-        st.sidebar.error(f"❌ Travel guide failed: {str(e)}")
-        return f"Error generating travel guide: {str(e)}"
-def generate_travel_guide(self, country_data, traveler_type, duration):
-    """Generate a travel guide using Gemini"""
-    st.sidebar.write("🔍 Debug: Starting generate_travel_guide")
-    st.sidebar.write("🔍 Debug: gemini_available =", self.gemini_available)
-    
-    if not self.gemini_available:
-        st.sidebar.error("❌ Gemini is NOT available in class init")
-        return "Gemini API not configured. Please check your API key."
-    
-    st.sidebar.success("✅ Gemini is available in class!")
-    
-    # Build prompt
-    country_name = country_data.get('name', {}).get('common', 'Unknown')
-    prompt = f"Create a simple 3-day {traveler_type} travel guide for {country_name}. Include budget tips and 3 main attractions."
-    
-    st.sidebar.write("🔍 Debug: Prompt ready, length:", len(prompt))
-    
-    try:
-        st.sidebar.info("📡 Attempting to call Gemini API...")
-        response = self.model.generate_content(prompt)
-        st.sidebar.success("✅ Gemini API call successful!")
-        st.sidebar.write("🔍 Debug: Response type:", type(response))
-        st.sidebar.write("🔍 Debug: Response text length:", len(response.text))
-        return response.text
-    except Exception as e:
-        st.sidebar.error(f"❌ Gemini API Exception: {str(e)}")
-        st.sidebar.error(f"❌ Exception type: {type(e).__name__}")
-        return f"AI service temporarily unavailable. Please try again later. Error: {str(e)}"
-    
-    st.info("🔄 Attempting to call Gemini API...")
-    
-    # ADD THIS MISSING CODE - build the prompt variable
-    country_name = country_data.get('name', {}).get('common', 'Unknown')
-    capital = country_data.get('capital', ['Unknown'])[0] if country_data.get('capital') else 'Unknown'
-    population = country_data.get('population', 0)
-    area = country_data.get('area', 0)
-    region = country_data.get('region', 'Unknown')
-    languages = list(country_data.get('languages', {}).values()) if country_data.get('languages') else ['Unknown']
-    
-    prompt = f"""
-    Create a detailed {duration}-day travel guide for {country_name} specifically for {traveler_type}.
-    
-    Country Information:
-    - Capital: {capital}
-    - Population: {population:,}
-    - Area: {area:,} km²
-    - Region: {region}
-    - Languages: {', '.join(languages)}
-    
-    Please include:
-    1. A brief introduction to the country
-    2. Recommended itinerary for {duration} days
-    3. Must-visit attractions and hidden gems
-    4. Local cuisine recommendations
-    5. Cultural tips and etiquette
-    6. Budget recommendations for {traveler_type}
-    7. Transportation advice
-    
-    Make it engaging and practical for someone actually planning to visit!
-    """
-    
-    try:
-        st.info("📡 Sending request to Gemini...")
-        response = self.model.generate_content(prompt)
-        st.success("✅ Gemini response received!")
-        return response.text
-    except Exception as e:
-        st.error(f"❌ Gemini API Error: {str(e)}")
-        return f"Error generating travel guide: {str(e)}"
 # Page configuration
 st.set_page_config(
     page_title="Country Insights with AI",
@@ -220,12 +34,36 @@ class CountryInsights:
     def __init__(self):
         self.base_url = "https://restcountries.com/v3.1"
         self.session = requests.Session()
-        # Configure Gemini - you'll need to set up your API key in Streamlit secrets
+        
+        # Configure Gemini with detailed debugging
+        st.sidebar.header("🚀 Gemini Initialization")
+        
         try:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            self.model = genai.GenerativeModel('gemini-pro')
+            # Check if secret exists
+            if "GEMINI_API_KEY" not in st.secrets:
+                st.sidebar.error("❌ GEMINI_API_KEY not found in st.secrets!")
+                self.gemini_available = False
+                return
+            
+            api_key = st.secrets["GEMINI_API_KEY"]
+            st.sidebar.success(f"✅ API Key found: {api_key[:12]}...")
+            
+            # Configure Gemini
+            genai.configure(api_key=api_key)
+            
+            # 🎯 USE THE CORRECT MODEL NAME
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            st.sidebar.success("✅ Using gemini-1.5-flash model")
+            
+            # Test the connection
+            test_response = self.model.generate_content("Say 'Hello' in 3 words.")
+            st.sidebar.success(f"✅ Test successful: '{test_response.text}'")
+            
             self.gemini_available = True
-        except:
+            st.sidebar.success("🎉 Gemini is ready!")
+            
+        except Exception as e:
+            st.sidebar.error(f"❌ Initialization Failed: {str(e)}")
             self.gemini_available = False
 
     def get_country_data(self, country_name):
