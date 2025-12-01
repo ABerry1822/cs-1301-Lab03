@@ -2,7 +2,24 @@ import streamlit as st
 import requests
 import google.generativeai as genai
 import os
-
+def generate_travel_guide(self, country_data, traveler_type, duration):
+    """Generate a travel guide using Gemini"""
+    if not self.gemini_available:
+        st.error("❌ Gemini is NOT available - check API key")
+        return "Gemini API not configured. Please check your API key."
+    
+    st.info("🔄 Attempting to call Gemini API...")
+    
+    # Your existing prompt code...
+    
+    try:
+        st.info("📡 Sending request to Gemini...")
+        response = self.model.generate_content(prompt)
+        st.success("✅ Gemini response received!")
+        return response.text
+    except Exception as e:
+        st.error(f"❌ Gemini API Error: {str(e)}")
+        return f"Error generating travel guide: {str(e)}"
 # Page configuration
 st.set_page_config(
     page_title="Country Insights with AI",
